@@ -10,13 +10,13 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 TOKEN = '8780993922:AAGFaTJn2VlPD8IV1NzleJ6q5XsKQt3nX0I'
 
-# --- بخش فیک برای راضی کردن وب‌سرویس رندر ---
+# --- بخش فیک برای زنده نگه داشتن سرور در رندر ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
-        self.wfile.write(b"Bot is Running!")
+        self.wfile.write(b"YouTube Downloader is Running!")
 
 def run_health_check_server():
     port = int(os.environ.get("PORT", 8080))
@@ -25,22 +25,23 @@ def run_health_check_server():
 # ----------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('سلام! لینک ویدیوی یوتیوب رو برام بفرست تا دانلودش کنم.')
+    await update.message.reply_text('سلام! لینک ویدیوی یوتیوب رو برام بفرست تا با کیفیت مناسب برات دانلود کنم.')
 
 async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     url = update.message.text
     chat_id = update.message.chat_id
     
-    if not url.startswith(('http://', 'https://')):
-        await update.message.reply_text('لطفاً یک لینک معتبر ارسال کنید.')
+    if not url.startswith(('http://', 'https://', 'www.youtube', 'youtu.be')):
+        await update.message.reply_text('لطفاً یک لینک معتبر از یوتیوب ارسال کنید.')
         return
 
-    status_message = await update.message.reply_text('در حال بررسی و دانلود ویدیو... لطفا کمی صبر کنید.')
+    status_message = await update.message.reply_text('🔍 در حال بررسی و دانلود ویدیو... لطفا کمی صبر کنید.\n(ویدیوهای طولانی به دلیل محدودیت حجم تلگرام ممکن است ارسال نشوند)')
 
+    # تنظیم کیفیت روی حداکثر 480p برای کم موندن حجم زیر ۵۰ مگابایت
     ydl_opts = {
-        'format': 'best[ext=mp4]/best',
+        'format': 'best[height<=480][ext=mp4]/best',
         'outtmpl': f'downloads/{chat_id}_%(id)s.%(ext)s',
-        'max_filesize': 50 * 1024 * 1024,
+        'max_filesize': 49 * 1024 * 1024, # محدودیت ۴۹ مگابایتی
     }
 
     try:
@@ -48,22 +49,23 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             
-        await status_message.edit_text('دانلود انجام شد! در حال ارسال به تلگرام...')
+        await status_message.edit_text('🚀 دانلود انجام شد! در حال ارسال به تلگرام شما...')
+        
         with open(filename, 'rb') as video_file:
             await update.message.reply_video(video=video_file, caption=info.get('title', 'Video'))
             
-        os.remove(filename)
+        if os.path.exists(filename):
+            os.remove(filename)
         await status_message.delete()
 
     except Exception as e:
         logging.error(f"Error: {e}")
-        await status_message.edit_text('متأسفانه در دانلود یا ارسال ویدیو خطایی رخ داد. ممکنه حجم ویدیو خیلی بالا باشه.')
+        await status_message.edit_text('❌ خطایی رخ داد!\nاحتمالاً حجم این ویدیو حتی با کیفیت پایین هم بیشتر از ۵۰ مگابایت بوده یا سرور رندر توسط یوتیوب محدود شده است.')
 
 def main():
     if not os.path.exists('downloads'):
         os.makedirs('downloads')
 
-    # اجرای سرور فیک در یک ترد جداگانه برای رندر
     threading.Thread(target=run_health_check_server, daemon=True).start()
 
     application = Application.builder().token(TOKEN).build()
@@ -73,3 +75,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
