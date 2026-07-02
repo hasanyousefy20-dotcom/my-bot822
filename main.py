@@ -1,5 +1,7 @@
 import os
 import logging
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
@@ -7,6 +9,20 @@ import yt_dlp
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 TOKEN = '8780993922:AAGFaTJn2VlPD8IV1NzleJ6q5XsKQt3nX0I'
+
+# --- بخش فیک برای راضی کردن وب‌سرویس رندر ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"Bot is Running!")
+
+def run_health_check_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+    server.serve_forever()
+# ----------------------------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('سلام! لینک ویدیوی یوتیوب رو برام بفرست تا دانلودش کنم.')
@@ -46,6 +62,9 @@ async def download_video(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     if not os.path.exists('downloads'):
         os.makedirs('downloads')
+
+    # اجرای سرور فیک در یک ترد جداگانه برای رندر
+    threading.Thread(target=run_health_check_server, daemon=True).start()
 
     application = Application.builder().token(TOKEN).build()
     application.add_handler(CommandHandler("start", start))
